@@ -20,18 +20,15 @@ trap 'rm -f "$LOG"; printf "%s" "$X"' EXIT
 banner() { # banner "<subtitle>"
   printf '\n'
   while IFS= read -r line; do
-    line=${line//\{/$R}; line=${line//\}/$X}; line=${line//</$B}; line=${line//>/$X}
-    printf '  %s%s\n' "$line" "$X"
-  done <<EYE
-      .-""""""""-.
-   .-'  .------.  '-.
-  /    /  .--.  \    \     <H  A  L>
- |    |  { (  ) }  |    |   $1
-  \    \  '--'  /    /     ${D}read-only · nothing leaves this terminal${X}
-   '-.  '------'  .-'
-      '-........-'
-EYE
-  printf '\n'
+    printf '  %s%s%s\n' "$B" "$line" "$X"
+  done <<'HAL'
+ _   _    _    _
+| | | |  / \  | |
+| |_| | / _ \ | |
+|  _  |/ ___ \| |___
+|_| |_/_/   \_\_____|
+HAL
+  printf '\n  %s%s%s\n  %ssomente leitura · nada sai deste terminal%s\n\n' "$B" "$1" "$X" "$D" "$X"
 }
 
 # run "label" cmd args…   a step with a spinner; on failure shows the last lines

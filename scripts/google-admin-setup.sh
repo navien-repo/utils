@@ -21,18 +21,15 @@ trap 'rm -f "$LOG"; printf "%s" "$X"' EXIT
 banner() { # banner "<subtitle>"
   printf '\n'
   while IFS= read -r line; do
-    line=${line//\{/$R}; line=${line//\}/$X}; line=${line//</$B}; line=${line//>/$X}
-    printf '  %s%s\n' "$line" "$X"
-  done <<EYE
-      .-""""""""-.
-   .-'  .------.  '-.
-  /    /  .--.  \    \     <H  A  L>
- |    |  { (  ) }  |    |   $1
-  \    \  '--'  /    /     ${D}read-only · nothing leaves this terminal${X}
-   '-.  '------'  .-'
-      '-........-'
-EYE
-  printf '\n'
+    printf '  %s%s%s\n' "$B" "$line" "$X"
+  done <<'HAL'
+ _   _    _    _
+| | | |  / \  | |
+| |_| | / _ \ | |
+|  _  |/ ___ \| |___
+|_| |_/_/   \_\_____|
+HAL
+  printf '\n  %s%s%s\n  %ssomente leitura · nada sai deste terminal%s\n\n' "$B" "$1" "$X" "$D" "$X"
 }
 
 # run "label" cmd args…   a step with a spinner; on failure shows the last lines
@@ -78,43 +75,43 @@ if ! gcloud projects list --limit=1 >"$LOG" 2>&1; then
   if grep -qiE 'credential|reauth|log ?in|active account|authenticat' "$LOG"; then
     note "O Cloud Shell ainda não autorizou sua conta. Vou pedir o login."
     printf '\n'
-    gcloud auth login --no-launch-browser --quiet || die "Login não concluído. Rode ./hal-google de novo."
+    gcloud auth login --no-launch-browser --quiet || die "Login não concluído. Rode ./create_hal_service_account de novo."
     printf '\n'
     gcloud projects list --limit=1 >"$LOG" 2>&1 || { shown "$LOG"; die "Sem acesso ao Google Cloud com essa conta."; }
   else
     shown "$LOG"; die "Não consegui falar com o Google Cloud."
   fi
 fi
-ok "Conta $(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n1)"
+ok "1/5  Conta Google: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n1)"
 
 PROJECT_ID="$(gcloud projects list --filter="name=$NAME AND lifecycleState=ACTIVE" --format='value(projectId)' --limit=1 2>/dev/null || true)"
 if [ -n "$PROJECT_ID" ]; then
-  ok "Projeto $NAME já existe ($PROJECT_ID)"
+  ok "2/5  Projeto $NAME já existe ($PROJECT_ID)"
 else
   PROJECT_ID="$BASE_ID"
-  if ! SOFT=1 run "Criando o projeto $NAME" gcloud projects create "$PROJECT_ID" --name="$NAME"; then
+  if ! SOFT=1 run "2/5  Criando o projeto $NAME" gcloud projects create "$PROJECT_ID" --name="$NAME"; then
     # The id is global to Google; if somebody else holds it, take a suffixed one.
     PROJECT_ID="$BASE_ID-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
-    run "Criando o projeto $NAME ($PROJECT_ID)" gcloud projects create "$PROJECT_ID" --name="$NAME" || exit 1
+    run "2/5  Criando o projeto $NAME ($PROJECT_ID)" gcloud projects create "$PROJECT_ID" --name="$NAME" || exit 1
   fi
 fi
 gcloud config set project "$PROJECT_ID" >/dev/null 2>&1
 
 # shellcheck disable=SC2086
-run "Ligando as APIs que o HAL lê" gcloud services enable $APIS --project="$PROJECT_ID" || exit 1
+run "3/5  Ligando as APIs que o HAL lê" gcloud services enable $APIS --project="$PROJECT_ID" || exit 1
 
 SA_EMAIL="$SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
 if gcloud iam service-accounts describe "$SA_EMAIL" >/dev/null 2>&1; then
-  ok "Conta de serviço $SA_NAME já existe"
+  ok "4/5  Conta de serviço $SA_NAME já existe"
 else
-  run "Criando a conta de serviço $SA_NAME" gcloud iam service-accounts create "$SA_NAME" --display-name="HAL" --description="HAL reads Google Workspace, read-only" || exit 1
+  run "4/5  Criando a conta de serviço $SA_NAME" gcloud iam service-accounts create "$SA_NAME" --display-name="HAL" --description="HAL reads Google Workspace, read-only" || exit 1
   sleep 5 # the account takes a moment to be visible to the key call
 fi
 
 rm -f "$OUT"
-if ! SOFT=1 run "Gerando a chave ($OUT)" gcloud iam service-accounts keys create "$OUT" --iam-account="$SA_EMAIL"; then
+if ! SOFT=1 run "5/5  Gerando a chave ($OUT)" gcloud iam service-accounts keys create "$OUT" --iam-account="$SA_EMAIL"; then
   if grep -qiE 'FAILED_PRECONDITION|constraint|disableServiceAccountKeyCreation' "$LOG"; then
-    printf '  %s%s%s %s\n' "$Y" "$NO" "$X" "Gerando a chave ($OUT)"
+    printf '  %s%s%s %s\n' "$Y" "$NO" "$X" "5/5  Gerando a chave ($OUT)"
     cat <<MSG
 
   ${Y}Sua organização do Google bloqueia chaves de conta de serviço${X}
@@ -131,20 +128,23 @@ if ! SOFT=1 run "Gerando a chave ($OUT)" gcloud iam service-accounts keys create
 MSG
     exit 1
   fi
-  printf '  %s%s%s %s\n' "$R" "$NO" "$X" "Gerando a chave ($OUT)"; shown "$LOG"
+  printf '  %s%s%s %s\n' "$R" "$NO" "$X" "5/5  Gerando a chave ($OUT)"; shown "$LOG"
   exit 1
 fi
 chmod 600 "$OUT"
 CLIENT_ID="$(jq -r .client_id "$OUT" 2>/dev/null || true)"
 
 printf '\n'; rule
-printf '   %sPronto.%s\n\n' "$B" "$X"
+printf '   %sPASSO 1 concluído.%s A conta de serviço do HAL existe.\n\n' "$B" "$X"
 fact "Conta" "$SA_EMAIL"
 fact "ID do cliente" "${CLIENT_ID:-veja no arquivo}"
 fact "Arquivo" "$PWD/$OUT"
-printf '\n   Devolva o arquivo ao HAL: botão %sSubir o arquivo .json%s.\n' "$B" "$X"
+printf '\n   %sFalta pouco%s\n\n' "$B" "$X"
+printf '   2) Baixe o arquivo %s%s%s. O download abre sozinho:\n      clique em %sDownload%s na janela que aparecer.\n' "$B" "$OUT" "$X" "$B" "$X"
+printf '   3) Volte ao HAL e clique em %sSubir o arquivo .json%s.\n' "$B" "$X"
+printf '   4) Autorize a conta no Admin console. O HAL mostra o\n      ID do cliente e os escopos depois de ler o arquivo.\n'
 rule; printf '\n'
 
 if command -v cloudshell >/dev/null; then
-  cloudshell download "$OUT" || note "Se o download não começou: menu no alto à direita > Download > $OUT"
+  cloudshell download "$OUT" || note "O download não abriu? Menu de três pontos no alto à direita > Download > $OUT"
 fi

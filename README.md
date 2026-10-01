@@ -10,7 +10,8 @@ single JSON file. Nothing is sent anywhere: the person uploads the file in HAL.
 | `scripts/aws-audit-setup.sh` | AWS CloudShell | `hal-aws.json` (`aws iam create-access-key` answer) |
 
 Google: HAL opens Cloud Shell as a terminal only (no editor) with this repo
-cloned and `print-google.txt` printed; the person types `./hal-google`.
+cloned and `print-google.txt` printed; the person types `./create_hal_service_account`
+(`./hal-google` is the old name, kept as an alias).
 Neither cloud runs a command from a link, so that one line is the floor.
 
 AWS CloudShell has no link with a script, so HAL shows the command to paste:
