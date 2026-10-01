@@ -51,10 +51,11 @@ run() {
   if wait "$pid"; then
     printf '  %s%s%s %s\n' "$G" "$OK" "$X" "$label"
   else
-    [ -n "${SOFT:-}" ] || { printf '  %s%s%s %s\n' "$R" "$NO" "$X" "$label"; tail -n 8 "$LOG" | sed 's/^/      /'; }
+    [ -n "${SOFT:-}" ] || { printf '  %s%s%s %s\n' "$R" "$NO" "$X" "$label"; shown "$LOG"; }
     return 1
   fi
 }
+shown() { grep -v '^[[:space:]]*$' "$1" | tail -n 12 | sed 's/^[[:space:]]*/      /'; }
 ok()   { printf '  %s%s%s %s\n' "$G" "$OK" "$X" "$1"; }
 note() { printf '  %s·%s %s\n' "$D" "$X" "$1"; }
 die()  { printf '\n  %s%s%s %s\n\n' "$R" "$NO" "$X" "$1" >&2; exit 1; }
@@ -70,6 +71,21 @@ APIS="iam.googleapis.com admin.googleapis.com cloudidentity.googleapis.com licen
 
 banner "Google Admin · conta de serviço"
 command -v gcloud >/dev/null || die "Abra este script no Google Cloud Shell: https://shell.cloud.google.com"
+
+# The Cloud Shell token may be missing or expired; every later step would fail
+# with a cut-off message. Check it first and sign in right here if needed.
+if ! gcloud projects list --limit=1 >"$LOG" 2>&1; then
+  if grep -qiE 'credential|reauth|log ?in|active account|authenticat' "$LOG"; then
+    note "O Cloud Shell ainda não autorizou sua conta. Vou pedir o login."
+    printf '\n'
+    gcloud auth login --no-launch-browser --quiet || die "Login não concluído. Rode ./hal-google de novo."
+    printf '\n'
+    gcloud projects list --limit=1 >"$LOG" 2>&1 || { shown "$LOG"; die "Sem acesso ao Google Cloud com essa conta."; }
+  else
+    shown "$LOG"; die "Não consegui falar com o Google Cloud."
+  fi
+fi
+ok "Conta $(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n1)"
 
 PROJECT_ID="$(gcloud projects list --filter="name=$NAME AND lifecycleState=ACTIVE" --format='value(projectId)' --limit=1 2>/dev/null || true)"
 if [ -n "$PROJECT_ID" ]; then
@@ -115,7 +131,7 @@ if ! SOFT=1 run "Gerando a chave ($OUT)" gcloud iam service-accounts keys create
 MSG
     exit 1
   fi
-  printf '  %s%s%s %s\n' "$R" "$NO" "$X" "Gerando a chave ($OUT)"; tail -n 8 "$LOG" | sed 's/^/      /'
+  printf '  %s%s%s %s\n' "$R" "$NO" "$X" "Gerando a chave ($OUT)"; shown "$LOG"
   exit 1
 fi
 chmod 600 "$OUT"

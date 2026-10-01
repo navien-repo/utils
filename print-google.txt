@@ -1,9 +1,13 @@
 
-  HAL · Google Admin
+  +--------------------------------------------------+
+  |  HAL  |  Google Admin                            |
+  +--------------------------------------------------+
 
-  Para criar a conta de servico e baixar a chave, digite:
+  Este passo cria a conta de servico que o HAL usa
+  para ler o seu Google Workspace (somente leitura).
+  Nada sai deste terminal.
+
+  Para comecar, digite o comando abaixo e aperte Enter:
 
       ./hal-google
-
-  e aperte Enter.
 
