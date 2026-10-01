@@ -1,0 +1,9 @@
+
+  HAL · Google Admin
+
+  Para criar a conta de servico e baixar a chave, digite:
+
+      ./hal-google
+
+  e aperte Enter.
+
