@@ -97,7 +97,9 @@ prepare_link() {
   fi
   aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
   aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" --lifecycle-configuration '{"Rules":[{"ID":"expire-1d","Status":"Enabled","Filter":{"Prefix":""},"Expiration":{"Days":1}}]}'
-  aws s3 cp "$OUT" "s3://$BUCKET/$OUT" >/dev/null
+  # Content-Disposition: attachment so the presigned link downloads the file
+  # instead of opening the JSON inline in the browser (the user, 2026-10-01).
+  aws s3 cp "$OUT" "s3://$BUCKET/$OUT" --content-type application/json --content-disposition "attachment; filename=$OUT" >/dev/null
 }
 
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text 2>/dev/null || true)"
