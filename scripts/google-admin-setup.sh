@@ -69,19 +69,31 @@ APIS="iam.googleapis.com admin.googleapis.com cloudidentity.googleapis.com licen
 banner "Google Admin · conta de serviço"
 command -v gcloud >/dev/null || die "Abra este script no Google Cloud Shell: https://shell.cloud.google.com"
 
-# The Cloud Shell token may be missing or expired; every later step would fail
-# with a cut-off message. Check it first and sign in right here if needed.
-if ! gcloud projects list --limit=1 >"$LOG" 2>&1; then
-  if grep -qiE 'credential|reauth|log ?in|active account|authenticat' "$LOG"; then
-    note "O Cloud Shell ainda não autorizou sua conta. Vou pedir o login."
+# Cloud Shell hands gcloud the person's credentials only after they click
+# Authorize in the dialog Google opens on the first call. Until then every call
+# fails with "no active account". Ask for the click and try again; signing in by
+# hand is the last resort: a Cloud Shell opened from an "Open in Cloud Shell"
+# repo link is a temporary one with no credentials and never shows the dialog.
+authed() { gcloud projects list --limit=1 >"$LOG" 2>&1; }
+TRIES=0
+until authed; do
+  grep -qiE 'credential|reauth|log ?in|active account|authenticat' "$LOG" || { shown "$LOG"; die "Não consegui falar com o Google Cloud."; }
+  TRIES=$((TRIES + 1))
+  if [ "$TRIES" -le 2 ]; then
+    [ "$TRIES" -eq 1 ] && printf '  %s!%s O Google precisa da sua autorização para este terminal.\n\n' "$Y" "$X"
+    [ "$TRIES" -eq 2 ] && printf '\n  %s!%s Ainda sem autorização.\n\n' "$Y" "$X"
+    printf '     1) Clique em %sAuthorize%s (Autorizar) na janela que o Google abriu.\n' "$B" "$X"
+    printf '     2) Volte aqui e aperte %sEnter%s. ' "$B" "$X"
+    read -r _ </dev/tty 2>/dev/null || true
     printf '\n'
-    gcloud auth login --no-launch-browser --quiet || die "Login não concluído. Rode ./create_hal_service_account de novo."
-    printf '\n'
-    gcloud projects list --limit=1 >"$LOG" 2>&1 || { shown "$LOG"; die "Sem acesso ao Google Cloud com essa conta."; }
   else
-    shown "$LOG"; die "Não consegui falar com o Google Cloud."
+    note "A janela não apareceu. Entre com sua conta por aqui:"
+    printf '\n'
+    gcloud auth login --no-launch-browser --quiet || die "Login não concluído. Rode o comando de novo."
+    printf '\n'
+    authed || { shown "$LOG"; die "Sem acesso ao Google Cloud com essa conta."; }
   fi
-fi
+done
 ok "1/5  Conta Google: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -n1)"
 
 PROJECT_ID="$(gcloud projects list --filter="name=$NAME AND lifecycleState=ACTIVE" --format='value(projectId)' --limit=1 2>/dev/null || true)"
