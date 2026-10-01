@@ -69,32 +69,35 @@ APIS="iam.googleapis.com admin.googleapis.com cloudidentity.googleapis.com licen
 banner "Google Admin · conta de serviço"
 command -v gcloud >/dev/null || die "Abra este script no Google Cloud Shell: https://shell.cloud.google.com"
 
-# gcloud has the person's account only when (1) the "Open in Cloud Shell" dialog
-# was confirmed with "Trust repo" checked (an untrusted repo gets a temporary
-# environment without credentials) and (2) they clicked Authorize when Google
-# asked. Say which click is missing; try once more for the Authorize one.
-authed() { gcloud projects list --limit=1 >"$LOG" 2>&1; }
+# The first gcloud call runs attached to the terminal, nothing redirected, the
+# way the scripts this one follows do it (Elastic's cloudbeat): Cloud Shell asks
+# for its Authorize click on the first credentialed call of a session, and a
+# call hidden behind a log file never got it. Its own error stays on screen.
+authed() { gcloud projects list --limit=1 --format=none; }
 no_account() {
   cat <<MSG
 
-  ${Y}!${X} ${B}Este terminal abriu sem a sua conta Google.${X}
+  ${Y}!${X} ${B}O gcloud deste terminal continua sem a sua conta Google.${X}
 
-    O Google só entrega a sua conta a este terminal se você marcar
-    ${B}Trust repo${X} na janela que aparece ao abrir o Cloud Shell.
+    Você não precisa fazer login de novo. O Cloud Shell entrega a conta
+    do navegador ao terminal depois de dois cliques:
 
-      1) Feche esta aba.
-      2) No HAL, clique de novo em ${B}Abrir o Google Cloud Shell${X}.
-      3) Marque ${B}Trust repo${X} e clique em ${B}Confirm${X}.
-      4) Digite ${B}./create_hal_service_account${X} e aperte Enter.
+      1) ${B}Trust repo${X} + ${B}Confirm${X}, na janela ao abrir o Cloud Shell.
+      2) ${B}Authorize${X}, na janela "Authorize Cloud Shell".
 
+    Abra de novo pelo botão do HAL e rode ${B}./create_hal_service_account${X}.
+    Se repetir, envie ao suporte o bloco abaixo.
+
+  ${D}diagnóstico${X}
 MSG
+  { gcloud auth list 2>&1; gcloud config list 2>&1; env | grep -iE '^(CLOUD_SHELL|DEVSHELL|GOOGLE_CLOUD|CLOUDSDK)[A-Z_]*=' | grep -viE 'token|secret|key'; } | sed 's/^/    /'
+  printf '\n'
   exit 1
 }
 if ! authed; then
-  grep -qiE 'credential|reauth|log ?in|active account|authenticat' "$LOG" || { shown "$LOG"; die "Não consegui falar com o Google Cloud."; }
-  printf '  %s!%s O Google precisa da sua autorização para este terminal.\n\n' "$Y" "$X"
-  printf '     Apareceu uma janela %sAuthorize Cloud Shell%s? Clique em %sAuthorize%s\n' "$B" "$X" "$B" "$X"
-  printf '     e aperte %sEnter%s aqui. Não apareceu? Aperte %sEnter%s mesmo assim. ' "$B" "$X" "$B" "$X"
+  printf '\n  %s!%s O Google precisa autorizar este terminal a usar a sua conta.\n\n' "$Y" "$X"
+  printf '     Na janela %sAuthorize Cloud Shell%s, clique em %sAuthorize%s.\n' "$B" "$X" "$B" "$X"
+  printf '     Depois aperte %sEnter%s aqui. ' "$B" "$X"
   { read -r _ </dev/tty; } 2>/dev/null || true
   printf '\n'
   authed || no_account
