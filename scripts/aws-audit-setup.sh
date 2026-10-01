@@ -82,11 +82,43 @@ rm -f "$OUT"
 mkkey() { ( umask 077; aws iam create-access-key --user-name "$USER_NAME" --output json > "$OUT" ); }
 run "Gerando a chave de acesso ($OUT)" mkkey || exit 1
 
+# A clickable one-time download instead of the Actions menu (the user,
+# 2026-10-01): put the key in a per-account scratch bucket whose objects
+# self-delete after a day, keep the bucket private, and presign a short-lived
+# GET link. The person's own CloudShell identity does this — not the read-only
+# key just created. If any step is refused, fall back to the Download-file menu.
+prepare_link() {
+  if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+    if [ "$REGION" = "us-east-1" ]; then
+      aws s3api create-bucket --bucket "$BUCKET" --region us-east-1
+    else
+      aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" --create-bucket-configuration "LocationConstraint=$REGION"
+    fi
+  fi
+  aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+  aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" --lifecycle-configuration '{"Rules":[{"ID":"expire-1d","Status":"Enabled","Filter":{"Prefix":""},"Expiration":{"Days":1}}]}'
+  aws s3 cp "$OUT" "s3://$BUCKET/$OUT" >/dev/null
+}
+
+ACCOUNT="$(aws sts get-caller-identity --query Account --output text 2>/dev/null || true)"
+REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
+BUCKET="hal-dl-${ACCOUNT}"
+LINK=""
+if [ -n "${ACCOUNT:-}" ] && SOFT=1 run "Preparando um link de download temporário" prepare_link; then
+  LINK="$(aws s3 presign "s3://$BUCKET/$OUT" --expires-in 3600 2>/dev/null || true)"
+fi
+
 printf '\n'; rule
 printf '   %sPronto.%s\n\n' "$B" "$X"
 fact "Identidade" "$USER_NAME"
 fact "Acesso" "SecurityAudit · ViewOnlyAccess"
-fact "Arquivo" "$PWD/$OUT"
-printf '\n   1. Baixe o arquivo: %sActions > Download file > %s%s\n' "$B" "$OUT" "$X"
-printf '   2. Devolva-o ao HAL: botão %sSubir o arquivo .json%s.\n' "$B" "$X"
+if [ -n "$LINK" ]; then
+  printf '\n   %s1. Baixe a chave neste link%s %s(expira em 1h; o arquivo some em 1 dia)%s:\n\n' "$B" "$X" "$D" "$X"
+  printf '      %s%s%s\n' "$C" "$LINK" "$X"
+  printf '\n   %s2. Volte ao HAL%s e suba o %s baixado.\n' "$B" "$X" "$OUT"
+else
+  printf '   %sArquivo:%s %s\n' "$D" "$X" "$PWD/$OUT"
+  printf '\n   %s1. Baixe o arquivo:%s Actions > Download file > %s%s%s\n' "$B" "$X" "$C" "$OUT" "$X"
+  printf '   %s2. Volte ao HAL%s e suba o %s.\n' "$B" "$X" "$OUT"
+fi
 rule; printf '\n'
