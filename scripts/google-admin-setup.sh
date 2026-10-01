@@ -77,15 +77,18 @@ authed() { gcloud projects list --limit=1 --format=none; }
 no_account() {
   cat <<MSG
 
-  ${Y}!${X} ${B}O gcloud deste terminal continua sem a sua conta Google.${X}
+  ${Y}!${X} ${B}Este terminal ficou sem a sua conta Google.${X}
 
-    Você não precisa fazer login de novo. O Cloud Shell entrega a conta
-    do navegador ao terminal depois de dois cliques:
+    Você não precisa fazer login de novo. É uma sessão antiga do
+    Cloud Shell: feche e abra outra.
 
-      1) ${B}Trust repo${X} + ${B}Confirm${X}, na janela ao abrir o Cloud Shell.
-      2) ${B}Authorize${X}, na janela "Authorize Cloud Shell".
+      1) Feche este terminal. Se ele voltar igual, use o menu
+         de três pontos no alto à direita > ${B}Restart${X}.
+      2) No HAL, clique de novo em ${B}Abrir o Google Cloud Shell${X}.
+      3) Marque ${B}Trust repo${X}, clique em ${B}Confirm${X} e, se o Google
+         pedir, em ${B}Authorize${X}.
+      4) Digite ${B}./create_hal_service_account${X} e aperte Enter.
 
-    Abra de novo pelo botão do HAL e rode ${B}./create_hal_service_account${X}.
     Se repetir, envie ao suporte o bloco abaixo.
 
   ${D}diagnóstico${X}
