@@ -9,19 +9,15 @@ single JSON file. Nothing is sent anywhere: the person uploads the file in HAL.
 | `scripts/google-admin-setup.sh` | Google Cloud Shell | `hal-google-admin.json` (service account key) |
 | `scripts/aws-audit-setup.sh` | AWS CloudShell | `hal-aws.json` (`aws iam create-access-key` answer) |
 
-Google: HAL opens a plain Cloud Shell (`https://shell.cloud.google.com/?show=terminal`)
-and shows the command to paste:
+Google: HAL opens Cloud Shell as a terminal only (no editor) with this repo
+cloned and `print-google.txt` printed; the person types
+`./create_hal_service_account` (`./hal-google` is the old name, kept as an alias).
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/navien-repo/utils/main/scripts/google-admin-setup.sh)
-```
-
-The person clicks **Authorize** once when Google asks and the script runs to the
-end. It is not opened through an "Open in Cloud Shell" repo link: Google gives a
-repo it does not own a temporary environment without the person's credentials,
-so `gcloud` has no account there. `./create_hal_service_account`, `./hal-google`
-and `print-google.txt` are what that link used; they still work, by signing in
-by hand.
+The person has to check **Trust repo** in the dialog Cloud Shell shows before
+opening: a repo Google does not own otherwise gets a temporary environment
+without the person's credentials, and `gcloud` has no account there. Then
+**Authorize** when Google asks. The script says so when it finds no account.
+(Elastic's cloudbeat, ZenML and Langflow document the same two clicks.)
 
 AWS CloudShell has no link with a script, so HAL shows the command to paste:
 
