@@ -25,6 +25,17 @@ AWS CloudShell has no link with a script, so HAL shows the command to paste:
 curl -fsSL https://raw.githubusercontent.com/navien-repo/utils/main/scripts/aws-audit-setup.sh | bash
 ```
 
+Both scripts speak Portuguese by default and English with `en` as the first
+argument (or `HAL_LANG=en`): `./create_hal_service_account en`,
+`bash <(curl …/aws-audit-setup.sh) en`. HAL passes the language of its own
+screen; the shell's `LANG` is not read, Cloud Shell is `en_US` for everyone.
+`print-google.txt` and `print-google.en.txt` are the two printed hints.
+
+If the organization forbids service account keys (the default since 2024-05-03,
+`iam.managed.disableServiceAccountKeyCreation`), the Google script asks y/n and
+overrides the constraint on the HAL project only; Google takes up to 15 minutes
+to apply it, so the script stops there and the next run generates the key.
+
 The AWS user gets `SecurityAudit` and `ViewOnlyAccess` only. The Google service
 account still needs domain-wide delegation, which a Workspace admin grants by
 hand in the Admin console (HAL shows the client ID and scopes to authorize).

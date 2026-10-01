@@ -1,0 +1,32 @@
+
+   _   _    _    _
+  | | | |  / \  | |
+  | |_| | / _ \ | |
+  |  _  |/ ___ \| |___
+  |_| |_/_/   \_\_____|    Google Admin
+
+  ==========================================================
+
+   You are about to create the service account HAL uses to
+   read your Google Workspace. Read-only. Nothing leaves this
+   terminal: at the end you take one file to HAL yourself.
+
+   How it works
+
+     1) Confirm creating the account         <-- you are here
+     2) Download the file hal-google-admin.json
+     3) Upload the file in HAL
+     4) Authorize the account in the Admin console
+
+  ----------------------------------------------------------
+
+   STEP 1
+
+   Type the command below and press Enter to confirm creating
+   the HAL-Project project and the hal-admin-sa service
+   account:
+
+       ./create_hal_service_account en
+
+  ==========================================================
+
