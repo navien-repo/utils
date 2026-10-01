@@ -74,27 +74,23 @@ command -v gcloud >/dev/null || die "Abra este script no Google Cloud Shell: htt
 # for its Authorize click on the first credentialed call of a session, and a
 # call hidden behind a log file never got it. Its own error stays on screen.
 authed() { gcloud projects list --limit=1 --format=none; }
+# A terminal still without the account is a stale Cloud Shell session: nothing
+# to sign in to, only a session to close. Enter closes it — the script hangs up
+# the shell that ran it, which only a Cloud Shell terminal is asked to do.
 no_account() {
   cat <<MSG
 
   ${Y}!${X} ${B}Este terminal ficou sem a sua conta Google.${X}
 
     Você não precisa fazer login de novo. É uma sessão antiga do
-    Cloud Shell: feche e abra outra.
+    Cloud Shell.
 
-      1) Feche este terminal. Se ele voltar igual, use o menu
-         de três pontos no alto à direita > ${B}Restart${X}.
-      2) No HAL, clique de novo em ${B}Abrir o Google Cloud Shell${X}.
-      3) Marque ${B}Trust repo${X}, clique em ${B}Confirm${X} e, se o Google
-         pedir, em ${B}Authorize${X}.
-      4) Digite ${B}./create_hal_service_account${X} e aperte Enter.
+    Aperte ${B}Enter${X}: esta sessão será fechada. Depois é só clicar de
+    novo em ${B}Abrir o Google Cloud Shell${X} no HAL.
 
-    Se repetir, envie ao suporte o bloco abaixo.
-
-  ${D}diagnóstico${X}
 MSG
-  { gcloud auth list 2>&1; gcloud config list 2>&1; env | grep -iE '^(CLOUD_SHELL|DEVSHELL|GOOGLE_CLOUD|CLOUDSDK)[A-Z_]*=' | grep -viE 'token|secret|key'; } | sed 's/^/    /'
-  printf '\n'
+  { read -r _ </dev/tty; } 2>/dev/null || true
+  [ -n "${CLOUD_SHELL:-}" ] && [ -t 1 ] && kill -HUP "$PPID" 2>/dev/null
   exit 1
 }
 if ! authed; then
