@@ -38,10 +38,29 @@ HAL
   printf '\n  %s%s%s\n  %s%s%s\n\n' "$B" "$1" "$X" "$D" "$2" "$X"
 }
 
-# run "label" cmd args…   a step with a spinner; on failure shows the last lines
-# (SOFT=1 keeps the failure quiet, for a step the script retries on its own).
+# run "label" cmd args…   a step with a spinner; prints the command before and
+# its output after, so the person sees what Google answered; on failure shows
+# the last lines (SOFT=1 keeps the failure quiet, for a step the script retries
+# on its own). A rate-limited call (RESOURCE_EXHAUSTED, 429, quota) is tried
+# again after a wait that grows: 10s, 20s, 30s.
+RATE_LIMITED='RESOURCE_EXHAUSTED|RATE_LIMIT_EXCEEDED|rateLimitExceeded|Quota exceeded|429'
 run() {
-  local label=$1 i=0; shift
+  local label=$1 attempt=1 wait; shift
+  printf '  %s$ %s%s\n' "$D" "$*" "$X"
+  while :; do
+    try "$label" "$@" && return 0
+    grep -qE "$RATE_LIMITED" "$LOG" && [ "$attempt" -le 3 ] || break
+    wait=$((attempt * 10))
+    printf '  %s!%s %s\n' "$Y" "$X" "$(say "$T_RETRY" "$wait" "$attempt")"
+    sleep "$wait"
+    attempt=$((attempt + 1))
+  done
+  [ -n "${SOFT:-}" ] || { printf '  %s%s%s %s\n' "$R" "$NO" "$X" "$label"; shown "$LOG"; }
+  return 1
+}
+# try "label" cmd args…   one attempt of run: the spinner, then the output.
+try() {
+  local label=$1 i=0 start=$SECONDS; shift
   ( "$@" ) >"$LOG" 2>&1 &
   local pid=$!
   if [ -t 1 ]; then
@@ -51,12 +70,9 @@ run() {
     done
     printf '\r\033[K'
   fi
-  if wait "$pid"; then
-    printf '  %s%s%s %s\n' "$G" "$OK" "$X" "$label"
-  else
-    [ -n "${SOFT:-}" ] || { printf '  %s%s%s %s\n' "$R" "$NO" "$X" "$label"; shown "$LOG"; }
-    return 1
-  fi
+  wait "$pid" || return 1
+  printf '  %s%s%s %s %s(%ss)%s\n' "$G" "$OK" "$X" "$label" "$D" "$((SECONDS - start))" "$X"
+  printf '%s' "$D"; shown "$LOG"; printf '%s' "$X"
 }
 shown() { grep -v '^[[:space:]]*$' "$1" | tail -n 12 | sed 's/^[[:space:]]*/      /'; }
 ok()   { printf '  %s%s%s %s\n' "$G" "$OK" "$X" "$1"; }
@@ -65,6 +81,9 @@ die()  { printf '\n  %s%s%s %s\n\n' "$R" "$NO" "$X" "$1" >&2; exit 1; }
 rule() { printf '  %s' "$D"; for _ in $(seq 1 52); do printf '%s' "$RC"; done; printf '%s\n' "$X"; }
 fact() { printf '   %s%-19s%s %s\n' "$D" "$1" "$X" "$2"; }
 enter() { { read -r _ </dev/tty; } 2>/dev/null || true; }
+# pause N   a short wait between calls: a new account or project answers
+# RESOURCE_EXHAUSTED (429) to calls made back to back.
+pause() { note "$(say "$T_PAUSE" "$1")"; sleep "$1"; }
 # ────────────────────────────────────────────────────────────────────────────
 
 NAME="HAL-Project"
@@ -101,6 +120,8 @@ if [ "$L" = en ]; then
   T_NEXT_4="4) Authorize the account in the Admin console. HAL shows the\n      client ID and the scopes once it has read the file."
   T_NO_DOWNLOAD="Download did not open? Three-dot menu at the top right > Download > %s"
   T_YES_NO="Type %sy%s for yes or %sn%s for no, then Enter: "
+  T_PAUSE="waiting %ss (Google limits calls on new accounts)"
+  T_RETRY="Google asked to slow down; trying again in %ss (attempt %s of 3)"
 else
   T_SUB="Google Admin · conta de serviço"
   T_TAG="somente leitura · nada sai deste terminal"
@@ -124,6 +145,8 @@ else
   T_NEXT_4="4) Autorize a conta no Admin console. O HAL mostra o\n      ID do cliente e os escopos depois de ler o arquivo."
   T_NO_DOWNLOAD="O download não abriu? Menu de três pontos no alto à direita > Download > %s"
   T_YES_NO="Digite %sy%s para sim ou %sn%s para não, e Enter: "
+  T_PAUSE="aguardando %ss (o Google limita chamadas em contas novas)"
+  T_RETRY="O Google pediu para ir mais devagar; tentando de novo em %ss (tentativa %s de 3)"
 fi
 # shellcheck disable=SC2059
 say() { local format=$1; shift; printf "$format" "$@"; }
@@ -188,18 +211,24 @@ else
     PROJECT_ID="$BASE_ID-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
     run "$(say "$T_PROJECT" "$NAME") ($PROJECT_ID)" gcloud projects create "$PROJECT_ID" --name="$NAME" || exit 1
   fi
+  pause 10 # a new project takes a moment before it accepts API calls
 fi
 gcloud config set project "$PROJECT_ID" >/dev/null 2>&1
 
-# shellcheck disable=SC2086
-run "$T_APIS" gcloud services enable $APIS --project="$PROJECT_ID" || exit 1
+# One API per call, with a pause between them: a single call with all five is
+# the one new accounts were rate-limited on.
+note "$T_APIS"
+for api in $APIS; do
+  run "$api" gcloud services enable "$api" --project="$PROJECT_ID" || exit 1
+  pause 3
+done
 
 SA_EMAIL="$SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
 if gcloud iam service-accounts describe "$SA_EMAIL" >/dev/null 2>&1; then
   ok "$(say "$T_SA_EXISTS" "$SA_NAME")"
 else
   run "$(say "$T_SA" "$SA_NAME")" gcloud iam service-accounts create "$SA_NAME" --display-name="HAL" --description="HAL reads Google Workspace, read-only" || exit 1
-  sleep 5 # the account takes a moment to be visible to the key call
+  pause 5 # the account takes a moment to be visible to the key call
 fi
 
 # The organization forbids service account keys. With a yes, the script lifts
